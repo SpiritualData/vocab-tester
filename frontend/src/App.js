@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8010';
+const API_URL = 'http://18.189.128.76:8010';
 
 const VocabTester = () => {
   const [user, setUser] = useState('');
