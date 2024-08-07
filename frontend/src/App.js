@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
+import './VocabTester.css';
 
 const API_URL = 'http://18.189.128.76:8010';
 
@@ -100,8 +101,8 @@ const VocabTester = () => {
 
   const handleHint = () => {
     setUsedHint(true);
-    setCurrentTerm({ ...currentTerm, options: currentTerm.options });
-    setMessage("Here's a hint. Choose from these options:");
+    setMessage(`The correct answer is: ${currentTerm.term}`);
+    setAnswer(currentTerm.term);
   };
 
   const getProgressData = () => {
@@ -112,7 +113,7 @@ const VocabTester = () => {
       { name: 'Recalled', value: progress.stats.recalled_correctly || 0, color: '#FFEB3B' },
       { name: 'Correct', value: progress.stats.answered_correctly || 0, color: '#FF9800' },
       { name: 'Incorrect', value: progress.stats.answered_incorrectly || 0, color: '#F44336' },
-      { name: 'Untested', value: progress.stats.untested || 0, color: '#000000' },
+      { name: 'Untested', value: progress.stats.untested || 0, color: '#9E9E9E' },
     ];
   };
 
@@ -125,44 +126,44 @@ const VocabTester = () => {
 
   if (!loggedIn) {
     return (
-      <div className="p-4">
-        <form onSubmit={login}>
-          <h1 className="text-2xl mb-4">Vocabulary Tester</h1>
+      <div className="login-container">
+        <h1 className="app-title">Vocabulary Tester</h1>
+        <form onSubmit={login} className="login-form">
           <input
             type="text"
             value={user}
             onChange={(e) => setUser(e.target.value)}
             placeholder="Enter your name"
-            className="border p-2 mr-2"
+            className="input-field"
             disabled={isLoading}
           />
-          <button type="submit" className="bg-blue-500 text-white p-2 rounded" disabled={isLoading}>
-            {isLoading ? 'Logging in...' : 'Login'}
+          <button type="submit" className="btn btn-primary" disabled={isLoading}>
+            {isLoading ? 'Logging in...' : 'Start Testing'}
           </button>
         </form>
-        {message && <p className="text-red-500 mt-2">{message}</p>}
+        {message && <p className="error-message">{message}</p>}
       </div>
     );
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl mb-4">Vocabulary Tester</h1>
-      {isLoading && <p>Loading...</p>}
+    <div className="app-container">
+      <h1 className="app-title">Vocabulary Tester</h1>
+      {isLoading && <div className="loader">Loading...</div>}
       {currentTerm && (
-        <div className="mb-4">
-          <p className="font-bold">Definition:</p>
-          <p>{currentTerm.definition}</p>
+        <div className="question-container">
+          <p className="definition-label">Definition:</p>
+          <p className="definition-text">{currentTerm.definition}</p>
           {currentTerm.options ? (
-            <div className="mt-2">
+            <div className="options-container">
               {currentTerm.options.map((option, index) => (
                 <button
                   key={index}
                   onClick={() => submitAnswer(option, false)}
-                  className={`p-2 m-1 rounded ${
+                  className={`btn btn-option ${
                     incorrectAttempt && option === currentTerm.term
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200'
+                      ? 'btn-correct'
+                      : ''
                   }`}
                   disabled={isLoading}
                 >
@@ -171,26 +172,26 @@ const VocabTester = () => {
               ))}
             </div>
           ) : (
-            <div>
+            <div className="recall-container">
               <input
                 type="text"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Enter the term"
-                className="border p-2 mt-2 w-full"
-                disabled={isLoading}
+                className="input-field"
+                disabled={isLoading || usedHint}
               />
-              <div className="mt-2">
+              <div className="button-group">
                 <button 
                   onClick={() => submitAnswer(answer, true)} 
-                  className="bg-green-500 text-white p-2 rounded mr-2"
+                  className="btn btn-primary"
                   disabled={isLoading}
                 >
                   Submit
                 </button>
                 <button 
                   onClick={handleHint} 
-                  className="bg-yellow-500 text-white p-2 rounded"
+                  className="btn btn-secondary"
                   disabled={isLoading || usedHint}
                 >
                   Hint
@@ -200,14 +201,14 @@ const VocabTester = () => {
           )}
         </div>
       )}
-      {message && <p className="text-lg font-bold mb-4">{message}</p>}
+      {message && <p className="message">{message}</p>}
       {progress && (
-        <div className="mt-4">
-          <h2 className="text-xl mb-2">Progress</h2>
-          <ResponsiveContainer width="100%" height={600}>
+        <div className="progress-container">
+          <h2 className="progress-title">Your Progress</h2>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={getProgressData()}>
               <XAxis dataKey="name" />
-              <YAxis tickCount={11} domain={[0, 100]} />
+              <YAxis tickCount={6} domain={[0, 'dataMax + 5']} />
               <Tooltip />
               <Legend />
               <Bar dataKey="value" fill={(entry) => entry.color} />
