@@ -13,6 +13,7 @@ const VocabTester = () => {
   const [progress, setProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [incorrectAttempt, setIncorrectAttempt] = useState(false);
+  const [usedHint, setUsedHint] = useState(false);
 
   const login = async (e) => {
     e.preventDefault();
@@ -43,6 +44,7 @@ const VocabTester = () => {
       }
       setAnswer('');
       setIncorrectAttempt(false);
+      setUsedHint(false);
     } catch (error) {
       console.error('Error fetching next term:', error);
       setMessage('Failed to fetch next term. Please try again.');
@@ -51,29 +53,28 @@ const VocabTester = () => {
     }
   }, [user]);
 
-  const submitAnswer = async (submittedAnswer, useHint = false) => {
+  const submitAnswer = async (submittedAnswer, isRecall) => {
     setIsLoading(true);
     try {
       const { data } = await axios.post(`${API_URL}/answer/${user}`, {
         term: currentTerm.term,
         answer: submittedAnswer,
-        used_hint: useHint,
+        used_hint: usedHint,
+        is_recall: isRecall
       });
       
       if (data.correct) {
         setMessage('Correct!');
-        if (!incorrectAttempt) {
-          await fetchProgress();
-          await fetchNextTerm();
-        } else {
-          setCurrentTerm(null);
-          setTimeout(fetchNextTerm, 1500);
-        }
+        await fetchProgress();
+        await fetchNextTerm();
       } else {
-        setMessage(`Incorrect. Please try again.`);
+        setMessage(`Incorrect. ${isRecall ? "Please try again." : "The correct term is: " + currentTerm.term}`);
         if (!incorrectAttempt) {
           setIncorrectAttempt(true);
           await fetchProgress();
+        }
+        if (!isRecall) {
+          setTimeout(fetchNextTerm, 1500);
         }
       }
     } catch (error) {
@@ -98,7 +99,9 @@ const VocabTester = () => {
   };
 
   const handleHint = () => {
+    setUsedHint(true);
     setCurrentTerm({ ...currentTerm, options: currentTerm.options });
+    setMessage("Here's a hint. Choose from these options:");
   };
 
   const getProgressData = () => {
@@ -179,7 +182,7 @@ const VocabTester = () => {
               />
               <div className="mt-2">
                 <button 
-                  onClick={() => submitAnswer(answer, false)} 
+                  onClick={() => submitAnswer(answer, true)} 
                   className="bg-green-500 text-white p-2 rounded mr-2"
                   disabled={isLoading}
                 >
@@ -188,7 +191,7 @@ const VocabTester = () => {
                 <button 
                   onClick={handleHint} 
                   className="bg-yellow-500 text-white p-2 rounded"
-                  disabled={isLoading}
+                  disabled={isLoading || usedHint}
                 >
                   Hint
                 </button>

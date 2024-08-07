@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 import json
 from fastapi.middleware.cors import CORSMiddleware
+import re
 
 
 app = FastAPI()
@@ -22,21 +23,35 @@ app.add_middleware(
 # Environment variable for CSV file path
 CSV_FILE_PATH = os.getenv("VOCAB_CSV_PATH", "vocab.csv")
 
+def normalize_term(term: str) -> str:
+    """Normalize a term for recall matching."""
+    # Remove content within brackets and parentheses
+    term = re.sub(r'\[.*?\]|\(.*?\)', '', term)
+    # Remove punctuation and convert to lowercase
+    term = re.sub(r'[^\w\s]', '', term.lower())
+    # Remove extra whitespace
+    term = ' '.join(term.split())
+    return term
+
 # Load vocabulary from CSV
 def load_vocab():
     vocab = {}
+    normalized_vocab = {}
     with open(CSV_FILE_PATH, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            vocab[row['Term']] = row['Definition']
-    return vocab
+            term = row['Term']
+            vocab[term] = row['Definition']
+            normalized_vocab[normalize_term(term)] = term
+    return vocab, normalized_vocab
 
-VOCAB = load_vocab()
+VOCAB, NORMALIZED_VOCAB = load_vocab()
 
 # User data structure
 class TermProgress(BaseModel):
     status: str
     last_tested: Optional[str] = None
+    last_correct: Optional[str] = None
     times_correct: int = 0
 
 class UserData(BaseModel):
@@ -47,6 +62,7 @@ class AnswerSubmission(BaseModel):
     term: str
     answer: str
     used_hint: bool = False
+    is_recall: bool = False
 
 # Load user data from JSON file
 def load_user_data():
@@ -67,25 +83,18 @@ USER_DATA = load_user_data()
 
 @app.post("/login")
 async def login(name: str):
-    user_data = load_user_data()
-    if name not in user_data:
-        user_data[name] = UserData(
+    if name not in USER_DATA:
+        USER_DATA[name] = UserData(
             name=name,
             progress={term: TermProgress(status="untested") for term in VOCAB}
         )
-        save_user_data(user_data)
+        save_user_data(USER_DATA)
     return {"message": "Logged in successfully"}
 
 @app.get("/next_term/{user}")
 async def next_term(user: str):
     if user not in USER_DATA:
-        print(f"Adding {user} not in current users: ", USER_DATA.keys())
-        # login the user
-        USER_DATA[user] = UserData(
-            name=user,
-            progress={term: TermProgress(status="untested") for term in VOCAB}
-        )
-        save_user_data(USER_DATA)
+        raise HTTPException(status_code=404, detail="User not found")
     
     user_progress = USER_DATA[user].progress
     current_time = datetime.now()
@@ -125,25 +134,36 @@ async def submit_answer(user: str, submission: AnswerSubmission):
         raise HTTPException(status_code=404, detail="Term not found")
     
     user_progress = USER_DATA[user].progress
-    correct = submission.answer.lower().strip() == submission.term.lower().strip()
+    term_progress = user_progress[submission.term]
+    current_time = datetime.now()
     
-    user_progress[submission.term].last_tested = datetime.now().isoformat()
+    if submission.is_recall:
+        normalized_answer = normalize_term(submission.answer)
+        normalized_term = normalize_term(submission.term)
+        correct = normalized_answer == normalized_term
+    else:
+        correct = submission.answer.strip() == submission.term.strip()
+    
+    term_progress.last_tested = current_time.isoformat()
     
     if correct:
-        if not submission.used_hint:
-            user_progress[submission.term].times_correct += 1
-            if user_progress[submission.term].times_correct >= 2 and user_progress[submission.term].status != "remembered":
-                user_progress[submission.term].status = "remembered"
-            elif user_progress[submission.term].status == "untested":
-                user_progress[submission.term].status = "answered_correctly"
-            elif user_progress[submission.term].status in ["answered_incorrectly", "recalled_correctly"]:
-                user_progress[submission.term].status = "recalled_correctly"
-        else:
-            if user_progress[submission.term].status == "untested":
-                user_progress[submission.term].status = "answered_correctly"
+        if submission.is_recall and not submission.used_hint:
+            term_progress.status = "recalled_correctly"
+            term_progress.times_correct += 1
+        elif not submission.is_recall:
+            term_progress.status = "answered_correctly"
+            term_progress.times_correct += 1
+        
+        if term_progress.times_correct >= 2 and term_progress.status != "remembered":
+            last_correct_time = datetime.fromisoformat(term_progress.last_correct) if term_progress.last_correct else None
+            if last_correct_time and (current_time - last_correct_time) >= timedelta(hours=12):
+                term_progress.status = "remembered"
+        
+        term_progress.last_correct = current_time.isoformat()
     else:
-        user_progress[submission.term].status = "answered_incorrectly"
-        user_progress[submission.term].times_correct = 0
+        if term_progress.status != "recalled_correctly":
+            term_progress.status = "answered_incorrectly"
+            term_progress.times_correct = 0
     
     save_user_data(USER_DATA)
     
@@ -154,11 +174,10 @@ async def submit_answer(user: str, submission: AnswerSubmission):
 
 @app.get("/progress/{user}")
 async def get_progress(user: str):
-    user_data = load_user_data()
-    if user not in user_data:
+    if user not in USER_DATA:
         raise HTTPException(status_code=404, detail="User not found")
     
-    user_progress = user_data[user].progress
+    user_progress = USER_DATA[user].progress
     total = len(user_progress)
     
     stats = {
