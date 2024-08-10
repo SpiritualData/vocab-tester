@@ -99,22 +99,36 @@ async def next_term(user: str):
     user_progress = USER_DATA[user].progress
     current_time = datetime.now()
     
-    # Filter and sort terms based on your requirements
-    sorted_terms = sorted(
-        user_progress.items(),
-        key=lambda item: (
-            item[1].status == "untested",  # Untested terms first (True if untested, False otherwise)
-            item[1].status == "answered_incorrectly",  # Then terms answered incorrectly (True if incorrect, False otherwise)
-            item[1].status == "remembered",  # Exclude remembered terms (True if remembered, False otherwise)
-            item[1].last_tested if item[1].last_tested else datetime.min  # Sort by last_tested, oldest first
-        ),
-        reverse=False  # Ensure False (untested or incorrect) comes before True
-    )
+    # Step 1: Collect all untested terms
+    untested_terms = [term for term, data in user_progress.items() if data.status == "untested"]
+    term = None
+    if untested_terms:
+        # If there are untested terms, choose one
+        term = untested_terms[0]
+    else:
+        # Step 2: If no untested terms, collect incorrectly answered terms sorted by last_tested
+        incorrect_terms = sorted(
+            [term for term, data in user_progress.items() if data.status == "answered_incorrectly"],
+            key=lambda term: user_progress[term].last_tested if user_progress[term].last_tested else datetime.min
+        )
+        
+        if incorrect_terms:
+            # If there are incorrectly answered terms, choose the oldest one
+            term = incorrect_terms[0]
+        else:
+            # Step 3: If no incorrectly answered terms, collect non-remembered terms sorted by last_tested
+            recall_terms = sorted(
+                [term for term, data in user_progress.items() if data.status != "remembered"],
+                key=lambda term: user_progress[term].last_tested if user_progress[term].last_tested else datetime.min
+            )
+            
+            if recall_terms:
+                # Choose the oldest recall term
+                term = recall_terms[0]
+            else:
+                return {"message": "No more terms to test"}
 
-    # Extracting only the terms after sorting
-    eligible_terms = [term for term, _ in sorted_terms]
-
-    if not eligible_terms:
+    if not term:
         return {"message": "No more terms to test"}
 
     # Select the first term in the sorted list to ensure the highest priority term is chosen
