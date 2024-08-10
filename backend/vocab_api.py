@@ -131,8 +131,6 @@ async def next_term(user: str):
     if not term:
         return {"message": "No more terms to test"}
 
-    # Select the first term in the sorted list to ensure the highest priority term is chosen
-    term = eligible_terms[0]
     definition = VOCAB[term]
     
     options = [term]
