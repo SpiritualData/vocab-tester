@@ -100,11 +100,19 @@ async def next_term(user: str):
     current_time = datetime.now()
     
     # Filter terms based on status and last tested time
-    eligible_terms = [
-        term for term, data in user_progress.items()
-        if data.status != "remembered" or 
-        (data.last_tested and (current_time - datetime.fromisoformat(data.last_tested)) > timedelta(hours=12))
-    ]
+    sorted_terms = sorted(
+        user_progress.items(),
+        key=lambda item: (
+            item[1].status == "untested",  # False comes before True, untested terms first
+            item[1].last_tested if item[1].last_tested else datetime.min,  # Sort by last_tested, oldest first
+            item[1].status == "answered_incorrectly",  # Then sort by incorrect answers
+            item[1].status != "remembered"  # Finally, sort by non-remembered status
+        ),
+        reverse=False  # Maintain the order with False first (untested, oldest to newest, then incorrect, then non-remembered)
+    )
+
+# Extracting only the terms after sorting
+eligible_terms = [term for term, _ in sorted_terms]
     
     if not eligible_terms:
         return {"message": "No more terms to test"}
