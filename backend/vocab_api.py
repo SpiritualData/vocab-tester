@@ -111,8 +111,8 @@ async def next_term(user: str):
         reverse=False  # Maintain the order with False first (untested, oldest to newest, then incorrect, then non-remembered)
     )
 
-# Extracting only the terms after sorting
-eligible_terms = [term for term, _ in sorted_terms]
+    # Extracting only the terms after sorting
+    eligible_terms = [term for term, _ in sorted_terms]
     
     if not eligible_terms:
         return {"message": "No more terms to test"}
