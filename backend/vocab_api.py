@@ -103,12 +103,12 @@ async def next_term(user: str):
     sorted_terms = sorted(
         user_progress.items(),
         key=lambda item: (
-            item[1].status == "untested",  # Untested terms first
-            item[1].status == "answered_incorrectly",  # Then terms answered incorrectly
-            item[1].status == "answered_correctly" and item[1].status != "remembered",  # Then terms answered correctly but not yet remembered
-            item[1].last_tested if item[1].last_tested else datetime.min  # Finally, sort by last_tested, oldest first
+            item[1].status == "untested",  # Untested terms first (True if untested, False otherwise)
+            item[1].status == "answered_incorrectly",  # Then terms answered incorrectly (True if incorrect, False otherwise)
+            item[1].status == "remembered",  # Exclude remembered terms (True if remembered, False otherwise)
+            item[1].last_tested if item[1].last_tested else datetime.min  # Sort by last_tested, oldest first
         ),
-        reverse=False  # False first, True last, oldest to newest
+        reverse=False  # Ensure False (untested or incorrect) comes before True
     )
 
     # Extracting only the terms after sorting
@@ -117,7 +117,8 @@ async def next_term(user: str):
     if not eligible_terms:
         return {"message": "No more terms to test"}
 
-    term = random.choice(eligible_terms)
+    # Select the first term in the sorted list to ensure the highest priority term is chosen
+    term = eligible_terms[0]
     definition = VOCAB[term]
     
     options = [term]
